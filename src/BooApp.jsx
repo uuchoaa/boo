@@ -402,6 +402,7 @@ export default function BooApp() {
   const [error, setError] = useState(null);
   const [phase, setPhase] = useState("input"); // input | result
   const textareaRef = useRef(null);
+  const [lastDurationMs, setLastDurationMs] = useState(null);
 
   const [selectedModelKey, setSelectedModelKey] = useState(() => {
     const stored = safeGetLocalStorageItem("boo-selected-model");
@@ -476,6 +477,10 @@ export default function BooApp() {
       }
     }
 
+    const startedAt =
+      typeof performance !== "undefined" && performance.now
+        ? performance.now()
+        : Date.now();
     setLoading(true);
     setError(null);
 
@@ -540,8 +545,26 @@ export default function BooApp() {
         rawText = data.content?.map((b) => b.text || "").join("") || "";
       }
 
-      const clean = rawText.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      let clean = rawText.replace(/```json|```/gi, "").trim();
+      const firstBrace = clean.indexOf("{");
+      const lastBrace = clean.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        clean = clean.slice(firstBrace, lastBrace + 1);
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch (err) {
+        // surface a clearer parse error and stop
+        setError(
+          "Parse error: " +
+            (err && typeof err === "object" && "message" in err
+              ? err.message
+              : String(err)),
+        );
+        return;
+      }
 
       setCommits(parsed.commits || []);
 
@@ -588,6 +611,12 @@ export default function BooApp() {
     } catch (e) {
       setError("Parse error: " + e.message);
     } finally {
+      const endedAt =
+        typeof performance !== "undefined" && performance.now
+          ? performance.now()
+          : Date.now();
+      const duration = Math.max(endedAt - startedAt, 0);
+      setLastDurationMs(duration);
       setLoading(false);
     }
   };
@@ -707,6 +736,17 @@ export default function BooApp() {
         {phase === "result" && (
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <CostBadge usage={usage} />
+            {lastDurationMs != null && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: "#555",
+                  fontFamily: "monospace",
+                }}
+              >
+                {`~${(lastDurationMs / 1000).toFixed(2)}s`}
+              </span>
+            )}
             <button
               onClick={exportMarkdown}
               style={{
