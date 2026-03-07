@@ -593,13 +593,16 @@ export default function BooApp() {
   };
 
   const exportJSON = () => {
+    const modelSlug = usage?.modelKey
+      ? String(usage.modelKey).replace(/[^a-z0-9]+/gi, "-").toLowerCase()
+      : "unknown-model";
     const blob = new Blob([JSON.stringify({ commits, usage }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "boo-commits.json";
+    a.download = `boo-commits-${modelSlug}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -634,11 +637,14 @@ export default function BooApp() {
         `---\n_Cost: ${costText} | ${inputTokens} in / ${outputTokens} out tokens_`,
       );
     }
+    const modelSlug = usage?.modelKey
+      ? String(usage.modelKey).replace(/[^a-z0-9]+/gi, "-").toLowerCase()
+      : "unknown-model";
     const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "boo-commits.md";
+    a.download = `boo-commits-${modelSlug}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
