@@ -1,8 +1,63 @@
-import { useState, useRef } from "react";
+import Groq from "groq-sdk";
+import { useState, useRef, useEffect } from "react";
 
-const MODEL = "claude-opus-4-5-20251101";
-const INPUT_COST_PER_MTK = 15.0 / 1_000_000;
-const OUTPUT_COST_PER_MTK = 75.0 / 1_000_000;
+const PROVIDERS = {
+  anthropic: {
+    id: "anthropic",
+    label: "Anthropic",
+    apiUrl: "https://api.anthropic.com/v1/messages",
+    models: {
+      opus46: {
+        key: "opus46",
+        label: "Claude Opus 4.6",
+        modelId: "claude-4.6-opus",
+        pricing: { inputPerMTok: 15, outputPerMTok: 75 },
+      },
+      sonnet46: {
+        key: "sonnet46",
+        label: "Claude Sonnet 4.6",
+        modelId: "claude-4.6-sonnet",
+        pricing: { inputPerMTok: 5, outputPerMTok: 25 },
+      },
+    },
+  },
+  groq: {
+    id: "groq",
+    label: "Groq",
+    models: {
+      compoundMini: {
+        key: "compoundMini",
+        label: "Groq Compound Mini",
+        modelId: "groq/compound-mini",
+        pricing: null,
+      },
+      compound: {
+        key: "compound",
+        label: "Groq Compound",
+        modelId: "groq/compound",
+        pricing: null,
+      },
+    },
+  },
+};
+
+function safeGetLocalStorageItem(key) {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalStorageItem(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
 
 const SYSTEM = `You are Boo, a ghost developer mimicking Rafael Uchôa's commit style.
 
@@ -299,9 +354,18 @@ function CommitCard({ commit, index, total }) {
 
 function CostBadge({ usage }) {
   if (!usage) return null;
-  const cost =
-    usage.input_tokens * INPUT_COST_PER_MTK +
-    usage.output_tokens * OUTPUT_COST_PER_MTK;
+  const inputTokens =
+    usage.input_tokens ??
+    usage.prompt_tokens ??
+    usage.total_tokens ??
+    0;
+  const outputTokens =
+    usage.output_tokens ??
+    usage.completion_tokens ??
+    (usage.total_tokens != null
+      ? Math.max(usage.total_tokens - inputTokens, 0)
+      : 0);
+  const hasCost = typeof usage.cost === "number" && !Number.isNaN(usage.cost);
   return (
     <div
       style={{
@@ -313,8 +377,8 @@ function CostBadge({ usage }) {
         fontFamily: "monospace",
       }}
     >
-      <span>↑{usage.input_tokens.toLocaleString()} tkn</span>
-      <span>↓{usage.output_tokens.toLocaleString()} tkn</span>
+      <span>↑{inputTokens.toLocaleString()} tkn</span>
+      <span>↓{outputTokens.toLocaleString()} tkn</span>
       <span
         style={{
           color: "#e6a817",
@@ -324,7 +388,7 @@ function CostBadge({ usage }) {
           padding: "2px 8px",
         }}
       >
-        ~${cost.toFixed(4)}
+        {hasCost ? `~$${usage.cost.toFixed(4)}` : "cost N/A"}
       </span>
     </div>
   );
@@ -339,35 +403,187 @@ export default function BooApp() {
   const [phase, setPhase] = useState("input"); // input | result
   const textareaRef = useRef(null);
 
+  const [selectedModelKey, setSelectedModelKey] = useState(() => {
+    const stored = safeGetLocalStorageItem("boo-selected-model");
+    return stored || "groq:compoundMini";
+  });
+
+  const [openaiApiKey, setOpenaiApiKey] = useState(() => {
+    const stored = safeGetLocalStorageItem("boo-openai-api-key");
+    return stored || "";
+  });
+  const [showOpenAIConfig, setShowOpenAIConfig] = useState(false);
+
+  useEffect(() => {
+    safeSetLocalStorageItem("boo-selected-model", selectedModelKey);
+  }, [selectedModelKey]);
+
+  const allModels = (() => {
+    const models = [];
+    Object.entries(PROVIDERS).forEach(([providerId, provider]) => {
+      Object.entries(provider.models).forEach(([key, model]) => {
+        models.push({
+          providerId,
+          modelKey: `${providerId}:${key}`,
+          label: model.label,
+          modelId: model.modelId,
+          pricing: model.pricing || null,
+        });
+      });
+    });
+    return models;
+  })();
+
+  const currentModel =
+    allModels.find((m) => m.modelKey === selectedModelKey) ||
+    allModels[0] ||
+    null;
+  const isGroqProvider = currentModel?.providerId === "groq";
+
+  const handleModelChange = (e) => {
+    setSelectedModelKey(e.target.value);
+  };
+
+  const normalizedUsage = usage
+    ? (() => {
+        const inputTokens =
+          usage.input_tokens ??
+          usage.prompt_tokens ??
+          usage.total_tokens ??
+          0;
+        const outputTokens =
+          usage.output_tokens ??
+          usage.completion_tokens ??
+          (usage.total_tokens != null
+            ? Math.max(usage.total_tokens - inputTokens, 0)
+            : 0);
+        const hasCost =
+          typeof usage.cost === "number" && !Number.isNaN(usage.cost);
+        return { inputTokens, outputTokens, hasCost };
+      })()
+    : null;
+
   const generate = async () => {
     if (!input.trim() || loading) return;
+    if (!currentModel) {
+      setError("No model configured.");
+      return;
+    }
+    if (isGroqProvider) {
+      if (!openaiApiKey.trim()) {
+        setError("Groq API key is required.");
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 4096,
-          system: SYSTEM,
-          messages: [{ role: "user", content: input.trim() }],
-        }),
-      });
+      let data;
+      let rawText = "";
 
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error.message);
-        return;
+      if (isGroqProvider) {
+        try {
+          const groq = new Groq({
+            apiKey: openaiApiKey.trim(),
+            dangerouslyAllowBrowser: true,
+          });
+          data = await groq.chat.completions.create({
+            model: currentModel.modelId,
+            max_tokens: 4096,
+            messages: [
+              { role: "system", content: SYSTEM },
+              { role: "user", content: input.trim() },
+            ],
+          });
+        } catch (err) {
+          const message =
+            (err &&
+              typeof err === "object" &&
+              "message" in err &&
+              err.message) ||
+            "Groq API error";
+          setError(String(message));
+          return;
+        }
+
+        const choice = data.choices?.[0];
+        if (!choice) {
+          setError("Empty response from model API");
+          return;
+        }
+        rawText =
+          typeof choice.message?.content === "string"
+            ? choice.message.content
+            : Array.isArray(choice.message?.content)
+              ? choice.message.content
+                  .map((part) => part.text || part)
+                  .join("")
+              : "";
+      } else {
+        const res = await fetch(PROVIDERS.anthropic.apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: currentModel.modelId,
+            max_tokens: 4096,
+            system: SYSTEM,
+            messages: [{ role: "user", content: input.trim() }],
+          }),
+        });
+        data = await res.json();
+        if (data.error) {
+          setError(data.error.message);
+          return;
+        }
+        rawText = data.content?.map((b) => b.text || "").join("") || "";
       }
 
-      const raw = data.content?.map((b) => b.text || "").join("") || "";
-      const clean = raw.replace(/```json|```/g, "").trim();
+      const clean = rawText.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
 
       setCommits(parsed.commits || []);
-      setUsage(data.usage);
+
+      const rawUsage = data.usage || null;
+      if (rawUsage) {
+        const inputTokens =
+          rawUsage.input_tokens ??
+          rawUsage.prompt_tokens ??
+          rawUsage.total_tokens ??
+          0;
+        const outputTokens =
+          rawUsage.output_tokens ??
+          rawUsage.completion_tokens ??
+          (rawUsage.total_tokens != null
+            ? Math.max(rawUsage.total_tokens - inputTokens, 0)
+            : 0);
+
+        const baseUsage = {
+          ...rawUsage,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+        };
+
+        let cost = null;
+        if (currentModel.pricing) {
+          const rateIn = currentModel.pricing.inputPerMTok || 0;
+          const rateOut = currentModel.pricing.outputPerMTok || 0;
+          cost =
+            ((inputTokens * rateIn + outputTokens * rateOut) / 1_000_000) || 0;
+        }
+
+        setUsage({
+          ...baseUsage,
+          cost,
+          providerId: currentModel.providerId,
+          modelKey: currentModel.modelKey,
+          modelLabel: currentModel.label,
+        });
+      } else {
+        setUsage(null);
+      }
+
       setPhase("result");
     } catch (e) {
       setError("Parse error: " + e.message);
@@ -400,11 +616,22 @@ export default function BooApp() {
       }
     });
     if (usage) {
-      const cost =
-        usage.input_tokens * INPUT_COST_PER_MTK +
-        usage.output_tokens * OUTPUT_COST_PER_MTK;
+      const inputTokens =
+        usage.input_tokens ??
+        usage.prompt_tokens ??
+        usage.total_tokens ??
+        0;
+      const outputTokens =
+        usage.output_tokens ??
+        usage.completion_tokens ??
+        (usage.total_tokens != null
+          ? Math.max(usage.total_tokens - inputTokens, 0)
+          : 0);
+      const hasCost =
+        typeof usage.cost === "number" && !Number.isNaN(usage.cost);
+      const costText = hasCost ? `~$${usage.cost.toFixed(4)}` : "N/A";
       lines.push(
-        `---\n_Cost: ~$${cost.toFixed(4)} | ${usage.input_tokens} in / ${usage.output_tokens} out tokens_`,
+        `---\n_Cost: ${costText} | ${inputTokens} in / ${outputTokens} out tokens_`,
       );
     }
     const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
@@ -568,28 +795,159 @@ export default function BooApp() {
           >
             <div
               style={{
-                marginBottom: "20px",
+                marginBottom: "12px",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                gap: "12px",
               }}
             >
-              <span
+              <div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "#444",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  issue + codebase context
+                </span>
+                <span
+                  style={{
+                    marginLeft: "8px",
+                    fontSize: "10px",
+                    color: "#333",
+                  }}
+                >
+                  markdown
+                </span>
+              </div>
+
+              <div
                 style={{
-                  fontSize: "11px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "10px",
                   color: "#444",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
                 }}
               >
-                issue + codebase context
-              </span>
-              <span style={{ fontSize: "10px", color: "#333" }}>markdown</span>
+                <span
+                  style={{
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  model
+                </span>
+                <select
+                  value={currentModel ? selectedModelKey : ""}
+                  onChange={handleModelChange}
+                  style={{
+                    background: "#0d0d0d",
+                    border: "1px solid #1a1a1a",
+                    borderRadius: "4px",
+                    color: "#c9d1d9",
+                    fontSize: "11px",
+                    padding: "4px 8px",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {allModels.length === 0 && (
+                    <option value="">no models configured</option>
+                  )}
+                  {allModels.map((m) => (
+                    <option key={m.modelKey} value={m.modelKey}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowOpenAIConfig((v) => !v)}
+                  style={{
+                    background: "none",
+                    border: "1px solid #1a1a1a",
+                    borderRadius: "4px",
+                    color: "#555",
+                    cursor: "pointer",
+                    padding: "3px 8px",
+                    fontSize: "10px",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  openai-compatible
+                  <span style={{ marginLeft: 4 }}>
+                    {showOpenAIConfig ? "▴" : "▾"}
+                  </span>
+                </button>
+              </div>
             </div>
+
+            {showOpenAIConfig && (
+              <div
+                style={{
+                  marginBottom: "12px",
+                  padding: "10px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #1a1a1a",
+                  background: "#050505",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "#555",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    groq api key
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <input
+                    type="password"
+                    value={openaiApiKey}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setOpenaiApiKey(next);
+                      safeSetLocalStorageItem("boo-openai-api-key", next);
+                    }}
+                    style={{
+                      background: "#0d0d0d",
+                      border: "1px solid #1a1a1a",
+                      borderRadius: "4px",
+                      color: "#c9d1d9",
+                      fontSize: "11px",
+                      padding: "4px 8px",
+                      fontFamily: "monospace",
+                      flex: 1,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             <textarea
               ref={textareaRef}
-              value={input}
+              value={input || PLACEHOLDER}
               onChange={(e) => setInput(e.target.value)}
               placeholder={PLACEHOLDER}
               style={{
@@ -783,8 +1141,16 @@ export default function BooApp() {
                       lineHeight: "1.8",
                     }}
                   >
-                    <div>in: {usage.input_tokens.toLocaleString()}</div>
-                    <div>out: {usage.output_tokens.toLocaleString()}</div>
+                    {normalizedUsage && (
+                      <>
+                        <div>
+                          in: {normalizedUsage.inputTokens.toLocaleString()}
+                        </div>
+                        <div>
+                          out: {normalizedUsage.outputTokens.toLocaleString()}
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div
                     style={{
@@ -794,11 +1160,9 @@ export default function BooApp() {
                       color: "#e6a817",
                     }}
                   >
-                    $
-                    {(
-                      usage.input_tokens * INPUT_COST_PER_MTK +
-                      usage.output_tokens * OUTPUT_COST_PER_MTK
-                    ).toFixed(4)}
+                    {normalizedUsage?.hasCost && typeof usage.cost === "number"
+                      ? `$${usage.cost.toFixed(4)}`
+                      : "N/A"}
                   </div>
                 </div>
               )}
