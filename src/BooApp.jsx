@@ -459,7 +459,7 @@ function CostBadge({ usage }) {
 }
 
 export default function BooApp() {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(PLACEHOLDER);
   const [commits, setCommits] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1026,7 +1026,7 @@ export default function BooApp() {
 
             <textarea
               ref={textareaRef}
-              value={input || PLACEHOLDER}
+              value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={PLACEHOLDER}
               style={{
