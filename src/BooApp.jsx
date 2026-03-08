@@ -80,12 +80,28 @@ const MOCK_COMMITS = [
   },
 ];
 
-const MOCK_REVIEWS = {
-  2: [
-    "No data migration: records already ghosted before this deploy will silently pass the updated :active scope",
-    "GHOSTED_STALE_DAYS is an Integer — ensure ActiveSupport is loaded before .days.ago is called in tests",
-  ],
+const MOCK_EVALUATION = {
+  score: 7,
+  reviews: {
+    1: { score: 9, issues: [] },
+    2: {
+      score: 5,
+      issues: [
+        "No data migration: records already ghosted before this deploy will silently pass the updated :active scope",
+        "GHOSTED_STALE_DAYS is an Integer — ensure ActiveSupport is loaded before .days.ago is called in tests",
+      ],
+    },
+    3: { score: 8, issues: [] },
+    4: { score: 9, issues: [] },
+  },
 };
+
+function scoreColor(score) {
+  if (score === null || score === undefined) return { color: "#555", bg: "#111", border: "#222" };
+  if (score >= 8) return { color: "#4ade80", bg: "#0d2010", border: "#1a5c28" };
+  if (score >= 5) return { color: "#f59e0b", bg: "#1a1000", border: "#92400e" };
+  return { color: "#f87171", bg: "#1a0808", border: "#5a1a1a" };
+}
 
 function safeGetLocalStorageItem(key) {
   if (typeof window === "undefined") return null;
@@ -137,21 +153,24 @@ Schema:
   ]
 }`;
 
-const REVIEW_SYSTEM = `You are a senior developer reviewing generated git diffs for correctness.
+const REVIEW_SYSTEM = `You are a senior developer evaluating generated git diffs.
 
-For each commit, identify concrete issues in the diff:
+For each commit assign a score 0–10 and list concrete issues:
 - Nil/null dereferences or missing guards
 - Wrong method signatures or missing arguments
 - Logic errors (wrong conditions, off-by-one, incorrect operators)
-- Missing validations or edge case handling
+- Missing validations or edge cases
 
-Be terse. Only flag real issues — empty arrays are valid and expected.
+Score guide: 10 = perfect, 7-9 = minor issues, 4-6 = notable problems, 0-3 = broken.
+Also assign an overall score (weighted average across all commits).
+Be terse. Empty issues arrays are valid and expected.
 Return ONLY valid JSON — no markdown, no preamble, no backticks.
 
 Schema:
 {
+  "score": 8,
   "reviews": [
-    { "order": 1, "issues": ["concise description of issue"] }
+    { "order": 1, "score": 9, "issues": ["concise description"] }
   ]
 }`;
 
@@ -332,6 +351,28 @@ function CommitCard({ commit, index, total }) {
           >
             {commit.files?.length || 0} files
           </span>
+
+          {/* Score badge */}
+          {commit.score !== undefined && commit.score !== null && (() => {
+            const sc = scoreColor(commit.score);
+            return (
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: "2px 7px",
+                  borderRadius: "3px",
+                  background: sc.bg,
+                  border: `1px solid ${sc.border}`,
+                  color: sc.color,
+                  fontFamily: "monospace",
+                  flexShrink: 0,
+                }}
+              >
+                {commit.score}/10
+              </span>
+            );
+          })()}
 
           {/* Issues badge */}
           {commit.issues?.length > 0 && (
@@ -543,7 +584,9 @@ function CostBadge({ usage }) {
 export default function BooApp() {
   const [input, setInput] = useState(PLACEHOLDER);
   const [commits, setCommits] = useState(null);
-  const [validating, setValidating] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [evaluated, setEvaluated] = useState(false);
+  const [overallScore, setOverallScore] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -620,6 +663,8 @@ export default function BooApp() {
         await new Promise((r) => setTimeout(r, 1800));
         setCommits(MOCK_COMMITS);
         setUsage(null);
+        setEvaluated(false);
+        setOverallScore(null);
         setPhase("result");
         return;
       }
@@ -749,13 +794,19 @@ export default function BooApp() {
     }
   };
 
-  const validate = async () => {
-    if (!commits || validating) return;
-    setValidating(true);
+  const evaluate = async () => {
+    if (!commits || evaluating) return;
+    setEvaluating(true);
     try {
       if (isMockProvider) {
         await new Promise((r) => setTimeout(r, 1200));
-        setCommits(commits.map((c) => ({ ...c, issues: MOCK_REVIEWS[c.order] ?? [] })));
+        setCommits(commits.map((c) => ({
+          ...c,
+          score: MOCK_EVALUATION.reviews[c.order]?.score ?? null,
+          issues: MOCK_EVALUATION.reviews[c.order]?.issues ?? [],
+        })));
+        setOverallScore(MOCK_EVALUATION.score);
+        setEvaluated(true);
         return;
       }
       const reviewPrompt = JSON.stringify(
@@ -791,12 +842,20 @@ export default function BooApp() {
       const rf = rc.indexOf("{"), rl = rc.lastIndexOf("}");
       if (rf !== -1 && rl !== -1) rc = rc.slice(rf, rl + 1);
       const rp = JSON.parse(rc);
-      const reviewMap = Object.fromEntries((rp.reviews || []).map((r) => [r.order, r.issues || []]));
-      setCommits(commits.map((c) => ({ ...c, issues: reviewMap[c.order] ?? [] })));
+      const reviewMap = Object.fromEntries(
+        (rp.reviews || []).map((r) => [r.order, { score: r.score ?? null, issues: r.issues || [] }]),
+      );
+      setCommits(commits.map((c) => ({
+        ...c,
+        score: reviewMap[c.order]?.score ?? null,
+        issues: reviewMap[c.order]?.issues ?? [],
+      })));
+      setOverallScore(rp.score ?? null);
+      setEvaluated(true);
     } catch {
       // silent failure
     } finally {
-      setValidating(false);
+      setEvaluating(false);
     }
   };
 
@@ -914,22 +973,42 @@ export default function BooApp() {
                 {`~${(lastDurationMs / 1000).toFixed(2)}s`}
               </span>
             )}
+            {evaluated && overallScore !== null && (() => {
+              const sc = scoreColor(overallScore);
+              return (
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    fontFamily: "monospace",
+                    padding: "3px 10px",
+                    borderRadius: "5px",
+                    background: sc.bg,
+                    border: `1px solid ${sc.border}`,
+                    color: sc.color,
+                  }}
+                >
+                  {overallScore}/10
+                </span>
+              );
+            })()}
             <button
-              onClick={validate}
-              disabled={validating}
+              onClick={evaluate}
+              disabled={evaluating}
               style={{
-                background: "none",
-                border: "1px solid #92400e",
+                background: evaluated ? "none" : "#f59e0b",
+                border: `1px solid ${evaluated ? "#92400e" : "#f59e0b"}`,
                 borderRadius: "5px",
-                color: validating ? "#555" : "#f59e0b",
-                cursor: validating ? "not-allowed" : "pointer",
+                color: evaluating ? "#555" : evaluated ? "#f59e0b" : "#000",
+                cursor: evaluating ? "not-allowed" : "pointer",
                 padding: "4px 10px",
                 fontSize: "11px",
+                fontWeight: evaluated ? 400 : 600,
                 fontFamily: "monospace",
                 transition: "all 0.15s",
               }}
             >
-              {validating ? "validating..." : "validate →"}
+              {evaluating ? "evaluating..." : evaluated ? "re-evaluate" : "evaluate →"}
             </button>
             <button
               onClick={exportMarkdown}
@@ -982,6 +1061,8 @@ export default function BooApp() {
                 setPhase("input");
                 setCommits(null);
                 setUsage(null);
+                setEvaluated(false);
+                setOverallScore(null);
               }}
               style={{
                 background: "none",
