@@ -39,7 +39,46 @@ const PROVIDERS = {
       },
     },
   },
+  mock: {
+    id: "mock",
+    label: "Mock",
+    models: {
+      mock: {
+        key: "mock",
+        label: "Mock",
+        modelId: "mock/mock",
+        pricing: null,
+      },
+    },
+  },
 };
+
+const MOCK_COMMITS = [
+  {
+    order: 1,
+    message: "test: add spec for Opportunity GHOSTED status and 7-day stale flag",
+    files: ["spec/models/opportunity_spec.rb", "spec/services/daily_briefing_spec.rb"],
+    diff: "diff --git a/spec/models/opportunity_spec.rb b/spec/models/opportunity_spec.rb\\nindex 0000000..abc1234 100644\\n--- /dev/null\\n+++ b/spec/models/opportunity_spec.rb\\n@@ -0,0 +1,18 @@\\n+require 'rails_helper'\\n+\\n+RSpec.describe Opportunity do\\n+  describe 'validations' do\\n+    it 'allows ghosted status' do\\n+      expect(build(:opportunity, status: 'ghosted')).to be_valid\\n+    end\\n+  end\\n+\\n+  describe '.ghosted_stale' do\\n+    it 'returns opportunities ghosted for more than 7 days' do\\n+      stale  = create(:opportunity, status: 'ghosted', updated_at: 8.days.ago)\\n+      recent = create(:opportunity, status: 'ghosted', updated_at: 3.days.ago)\\n+      expect(Opportunity.ghosted_stale).to     include(stale)\\n+      expect(Opportunity.ghosted_stale).not_to include(recent)\\n+    end\\n+  end\\n+end",
+  },
+  {
+    order: 2,
+    message: "feat: add GHOSTED to Opportunity statuses with ghosted_stale scope",
+    files: ["app/models/opportunity.rb"],
+    diff: "diff --git a/app/models/opportunity.rb b/app/models/opportunity.rb\\nindex def0001..def0002 100644\\n--- a/app/models/opportunity.rb\\n+++ b/app/models/opportunity.rb\\n@@ -1,7 +1,10 @@\\n class Opportunity < ApplicationRecord\\n-  STATUSES = %w[prospect applied screening interview offer rejected closed].freeze\\n+  STATUSES = %w[prospect applied screening interview offer rejected closed ghosted].freeze\\n+  GHOSTED_STALE_DAYS = 7\\n+\\n   belongs_to :contact, optional: true\\n   validates :company, :role, presence: true\\n   validates :status, inclusion: { in: STATUSES }\\n-  scope :active, -> { where.not(status: %w[rejected closed]) }\\n+  scope :active,        -> { where.not(status: %w[rejected closed ghosted]) }\\n+  scope :ghosted_stale, -> { where(status: 'ghosted').where('updated_at < ?', GHOSTED_STALE_DAYS.days.ago) }\\n end",
+  },
+  {
+    order: 3,
+    message: "feat: expose ghosted key in DailyBriefing",
+    files: ["app/services/daily_briefing.rb"],
+    diff: "diff --git a/app/services/daily_briefing.rb b/app/services/daily_briefing.rb\\nindex aaa0001..aaa0002 100644\\n--- a/app/services/daily_briefing.rb\\n+++ b/app/services/daily_briefing.rb\\n@@ -2,7 +2,8 @@ class DailyBriefing\\n   def call\\n     stale    = Opportunity.active.where('updated_at < ?', 5.days.ago)\\n     upcoming = Opportunity.where(status: %w[screening interview])\\n-    { stale: stale, upcoming: upcoming }\\n+    ghosted  = Opportunity.ghosted_stale\\n+    { stale: stale, upcoming: upcoming, ghosted: ghosted }\\n   end\\n end",
+  },
+  {
+    order: 4,
+    message: "docs: document GHOSTED status and daily briefing ghosted key",
+    files: ["docs/opportunity_statuses.md"],
+    diff: "diff --git a/docs/opportunity_statuses.md b/docs/opportunity_statuses.md\\nnew file mode 100644\\nindex 0000000..bbb0001\\n--- /dev/null\\n+++ b/docs/opportunity_statuses.md\\n@@ -0,0 +1,9 @@\\n+# Opportunity Statuses\\n+\\n+| Status  | Description                                 |\\n+|---------|---------------------------------------------|\\n+| ghosted | Recruiter went silent; set manually by user |\\n+\\n+## Daily Briefing\\n+\\n+- `ghosted`: opportunities in GHOSTED status for more than 7 days (`Opportunity.ghosted_stale`).",
+  },
+];
 
 function safeGetLocalStorageItem(key) {
   if (typeof window === "undefined") return null;
@@ -431,7 +470,7 @@ export default function BooApp() {
 
   const [selectedModelKey, setSelectedModelKey] = useState(() => {
     const stored = safeGetLocalStorageItem("boo-selected-model");
-    return stored || "groq:compoundMini";
+    return stored || "mock:mock";
   });
 
   const [openaiApiKey, setOpenaiApiKey] = useState(() => {
@@ -465,6 +504,7 @@ export default function BooApp() {
     allModels[0] ||
     null;
   const isGroqProvider = currentModel?.providerId === "groq";
+  const isMockProvider = currentModel?.providerId === "mock";
 
   const handleModelChange = (e) => {
     setSelectedModelKey(e.target.value);
@@ -478,7 +518,7 @@ export default function BooApp() {
       setError("No model configured.");
       return;
     }
-    if (isGroqProvider) {
+    if (isGroqProvider && !isMockProvider) {
       if (!openaiApiKey.trim()) {
         setError("Groq API key is required.");
         return;
@@ -493,6 +533,14 @@ export default function BooApp() {
     setError(null);
 
     try {
+      if (isMockProvider) {
+        await new Promise((r) => setTimeout(r, 1800));
+        setCommits(MOCK_COMMITS);
+        setUsage(null);
+        setPhase("result");
+        return;
+      }
+
       let data;
       let rawText = "";
 
