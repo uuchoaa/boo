@@ -352,6 +352,29 @@ function CommitCard({ commit, index, total }) {
   );
 }
 
+function repairTruncatedJSON(text) {
+  const closers = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{" || ch === "[") closers.push(ch === "{" ? "}" : "]");
+    else if (ch === "}" || ch === "]") closers.pop();
+  }
+  if (!inString && closers.length === 0) return null;
+  const base = escaped ? text.slice(0, -1) : text;
+  const suffix = (inString ? '"' : "") + closers.reverse().join("");
+  try {
+    return JSON.parse(base + suffix);
+  } catch {
+    return null;
+  }
+}
+
 function normalizeTokens(usage) {
   const inputTokens =
     usage.input_tokens ?? usage.prompt_tokens ?? usage.total_tokens ?? 0;
@@ -481,7 +504,7 @@ export default function BooApp() {
           });
           data = await groq.chat.completions.create({
             model: currentModel.modelId,
-            max_tokens: 4096,
+            max_tokens: 8192,
             messages: [
               { role: "system", content: SYSTEM },
               { role: "user", content: input.trim() },
@@ -517,7 +540,7 @@ export default function BooApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: currentModel.modelId,
-            max_tokens: 4096,
+            max_tokens: 8192,
             system: SYSTEM,
             messages: [{ role: "user", content: input.trim() }],
           }),
@@ -540,15 +563,14 @@ export default function BooApp() {
       let parsed;
       try {
         parsed = JSON.parse(clean);
-      } catch (err) {
-        // surface a clearer parse error and stop
-        setError(
-          "Parse error: " +
-            (err && typeof err === "object" && "message" in err
-              ? err.message
-              : String(err)),
-        );
-        return;
+      } catch {
+        const repaired = repairTruncatedJSON(clean);
+        if (repaired) {
+          parsed = repaired;
+        } else {
+          setError("Parse error: response was truncated and could not be recovered");
+          return;
+        }
       }
 
       setCommits(parsed.commits || []);
