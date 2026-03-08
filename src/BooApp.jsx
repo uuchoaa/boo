@@ -212,8 +212,8 @@ function CommitCard({ commit, index, total }) {
           {/* Order */}
           <span
             style={{
-              fontSize: "10px",
-              color: "#333",
+              fontSize: "11px",
+              color: "#555",
               fontFamily: "monospace",
               width: "18px",
               flexShrink: 0,
@@ -225,8 +225,8 @@ function CommitCard({ commit, index, total }) {
           {/* Type badge */}
           <span
             style={{
-              fontSize: "10px",
-              padding: "2px 6px",
+              fontSize: "11px",
+              padding: "2px 7px",
               borderRadius: "3px",
               background: colors.bg,
               border: `1px solid ${colors.border}`,
@@ -242,8 +242,8 @@ function CommitCard({ commit, index, total }) {
           {/* Message */}
           <span
             style={{
-              fontSize: "12px",
-              color: "#c9d1d9",
+              fontSize: "13px",
+              color: "#d8dfe8",
               fontFamily: "monospace",
               flex: 1,
               overflow: "hidden",
@@ -260,8 +260,8 @@ function CommitCard({ commit, index, total }) {
           {/* Files count */}
           <span
             style={{
-              fontSize: "10px",
-              color: "#444",
+              fontSize: "11px",
+              color: "#555",
               fontFamily: "monospace",
               flexShrink: 0,
             }}
@@ -297,10 +297,10 @@ function CommitCard({ commit, index, total }) {
                   <div
                     key={i}
                     style={{
-                      fontSize: "11px",
-                      color: "#666",
+                      fontSize: "12px",
+                      color: "#888",
                       fontFamily: "monospace",
-                      padding: "1px 0",
+                      padding: "2px 0",
                     }}
                   >
                     <span style={{ color: "#555" }}>📄 </span>
@@ -315,14 +315,14 @@ function CommitCard({ commit, index, total }) {
               <pre
                 style={{
                   margin: 0,
-                  padding: "12px 14px",
-                  fontSize: "11px",
-                  lineHeight: "1.6",
+                  padding: "12px 16px",
+                  fontSize: "12px",
+                  lineHeight: "1.7",
                   fontFamily: "monospace",
                   overflowX: "auto",
                   maxHeight: "320px",
                   overflowY: "auto",
-                  color: "#888",
+                  color: "#999",
                 }}
               >
                 {commit.diff.split("\\n").map((line, i) => {
@@ -374,8 +374,8 @@ function CostBadge({ usage }) {
         display: "flex",
         gap: "16px",
         alignItems: "center",
-        fontSize: "11px",
-        color: "#555",
+        fontSize: "12px",
+        color: "#777",
         fontFamily: "monospace",
       }}
     >
@@ -692,8 +692,8 @@ export default function BooApp() {
           >
             boo
           </span>
-          <span style={{ color: "#222", fontSize: "12px" }}>/</span>
-          <span style={{ fontSize: "11px", color: "#444" }}>ghost dev</span>
+          <span style={{ color: "#333", fontSize: "12px" }}>/</span>
+          <span style={{ fontSize: "11px", color: "#666" }}>ghost dev</span>
         </div>
 
         {phase === "result" && (
@@ -702,8 +702,8 @@ export default function BooApp() {
             {lastDurationMs != null && (
               <span
                 style={{
-                  fontSize: "10px",
-                  color: "#555",
+                  fontSize: "11px",
+                  color: "#666",
                   fontFamily: "monospace",
                 }}
               >
@@ -815,7 +815,7 @@ export default function BooApp() {
                 <span
                   style={{
                     fontSize: "11px",
-                    color: "#444",
+                    color: "#666",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                   }}
@@ -826,7 +826,7 @@ export default function BooApp() {
                   style={{
                     marginLeft: "8px",
                     fontSize: "10px",
-                    color: "#333",
+                    color: "#555",
                   }}
                 >
                   markdown
@@ -838,8 +838,8 @@ export default function BooApp() {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  fontSize: "10px",
-                  color: "#444",
+                  fontSize: "11px",
+                  color: "#666",
                 }}
               >
                 <span
@@ -855,10 +855,10 @@ export default function BooApp() {
                   onChange={handleModelChange}
                   style={{
                     background: "#0d0d0d",
-                    border: "1px solid #1a1a1a",
+                    border: "1px solid #252525",
                     borderRadius: "4px",
-                    color: "#c9d1d9",
-                    fontSize: "11px",
+                    color: "#d8dfe8",
+                    fontSize: "12px",
                     padding: "4px 8px",
                     fontFamily: "monospace",
                   }}
@@ -877,12 +877,12 @@ export default function BooApp() {
                   onClick={() => setShowOpenAIConfig((v) => !v)}
                   style={{
                     background: "none",
-                    border: "1px solid #1a1a1a",
+                    border: "1px solid #252525",
                     borderRadius: "4px",
-                    color: "#555",
+                    color: "#666",
                     cursor: "pointer",
                     padding: "3px 8px",
-                    fontSize: "10px",
+                    fontSize: "11px",
                     fontFamily: "monospace",
                   }}
                 >
@@ -914,8 +914,8 @@ export default function BooApp() {
                 >
                   <span
                     style={{
-                      fontSize: "10px",
-                      color: "#555",
+                      fontSize: "11px",
+                      color: "#666",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                     }}
@@ -962,19 +962,19 @@ export default function BooApp() {
               style={{
                 flex: 1,
                 minHeight: "420px",
-                background: "#0d0d0d",
-                border: "1px solid #1a1a1a",
+                background: "#0f0f0f",
+                border: "1px solid #222",
                 borderRadius: "8px",
-                padding: "16px",
-                color: "#c9d1d9",
-                fontSize: "12px",
-                lineHeight: "1.7",
+                padding: "20px",
+                color: "#dbe3ec",
+                fontSize: "14px",
+                lineHeight: "1.8",
                 fontFamily: "monospace",
                 resize: "none",
                 transition: "border-color 0.15s",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#2a2a2a")}
-              onBlur={(e) => (e.target.style.borderColor = "#1a1a1a")}
+              onFocus={(e) => (e.target.style.borderColor = "#333")}
+              onBlur={(e) => (e.target.style.borderColor = "#222")}
             />
 
             {error && (
@@ -1013,8 +1013,8 @@ export default function BooApp() {
                   borderRadius: "7px",
                   padding: "10px 24px",
                   cursor: input.trim() && !loading ? "pointer" : "not-allowed",
-                  color: input.trim() && !loading ? "#000" : "#444",
-                  fontSize: "12px",
+                  color: input.trim() && !loading ? "#000" : "#555",
+                  fontSize: "13px",
                   fontWeight: 600,
                   fontFamily: "monospace",
                   letterSpacing: "0.05em",
@@ -1062,7 +1062,7 @@ export default function BooApp() {
               <div
                 style={{
                   fontSize: "10px",
-                  color: "#333",
+                  color: "#555",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   marginBottom: "16px",
@@ -1083,7 +1083,7 @@ export default function BooApp() {
                   {commits.length}
                 </div>
                 <div
-                  style={{ fontSize: "10px", color: "#444", marginTop: "4px" }}
+                  style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}
                 >
                   commits
                 </div>
@@ -1116,8 +1116,8 @@ export default function BooApp() {
                         </span>
                         <span
                           style={{
-                            fontSize: "11px",
-                            color: "#444",
+                            fontSize: "12px",
+                            color: "#666",
                             fontFamily: "monospace",
                           }}
                         >
@@ -1135,7 +1135,7 @@ export default function BooApp() {
                   <div
                     style={{
                       fontSize: "10px",
-                      color: "#333",
+                      color: "#555",
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
                       marginBottom: "10px",
@@ -1145,8 +1145,8 @@ export default function BooApp() {
                   </div>
                   <div
                     style={{
-                      fontSize: "11px",
-                      color: "#555",
+                      fontSize: "12px",
+                      color: "#777",
                       lineHeight: "1.8",
                     }}
                   >
