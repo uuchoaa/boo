@@ -669,7 +669,7 @@ export default function BooApp() {
   const exportJSON = () => {
     const modelSlug = usage?.modelKey
       ? String(usage.modelKey).replace(/[^a-z0-9]+/gi, "-").toLowerCase()
-      : "unknown-model";
+      : String(currentModel?.modelKey || "unknown").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const blob = new Blob([JSON.stringify({ commits, usage }, null, 2)], {
       type: "application/json",
     });
@@ -701,7 +701,7 @@ export default function BooApp() {
     }
     const modelSlug = usage?.modelKey
       ? String(usage.modelKey).replace(/[^a-z0-9]+/gi, "-").toLowerCase()
-      : "unknown-model";
+      : String(currentModel?.modelKey || "unknown").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
