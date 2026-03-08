@@ -305,7 +305,7 @@ function CommitCard({ commit, index, total }) {
               flexShrink: 0,
             }}
           >
-            {commit.files?.length || 0}f
+            {commit.files?.length || 0} files
           </span>
 
           {/* Chevron */}
@@ -351,38 +351,48 @@ function CommitCard({ commit, index, total }) {
 
             {/* Diff */}
             {commit.diff && (
-              <pre
+              <div
                 style={{
                   margin: 0,
-                  padding: "12px 16px",
                   fontSize: "12px",
-                  lineHeight: "1.7",
+                  lineHeight: "1.6",
                   fontFamily: "monospace",
                   overflowX: "auto",
                   maxHeight: "320px",
                   overflowY: "auto",
-                  color: "#999",
                 }}
               >
                 {commit.diff.split("\\n").map((line, i) => {
-                  let color = "#666";
-                  if (line.startsWith("+") && !line.startsWith("+++"))
-                    color = "#4ade80";
-                  else if (line.startsWith("-") && !line.startsWith("---"))
-                    color = "#f87171";
-                  else if (line.startsWith("@@")) color = "#60a5fa";
-                  else if (
+                  const isAdded = line.startsWith("+") && !line.startsWith("+++");
+                  const isRemoved = line.startsWith("-") && !line.startsWith("---");
+                  const isHunk = line.startsWith("@@");
+                  const isHeader =
                     line.startsWith("diff ") ||
-                    line.startsWith("index ")
-                  )
-                    color = "#888";
-                  return (
-                    <span key={i} style={{ color, display: "block" }}>
-                      {line}
-                    </span>
-                  );
+                    line.startsWith("index ") ||
+                    line.startsWith("---") ||
+                    line.startsWith("+++");
+
+                  let style = {
+                    display: "block",
+                    padding: "1px 16px",
+                    whiteSpace: "pre",
+                    color: "#666",
+                  };
+                  if (isAdded) {
+                    style = { ...style, color: "#aff5b4", background: "#0d2818", borderLeft: "3px solid #238636", paddingLeft: "13px" };
+                  } else if (isRemoved) {
+                    style = { ...style, color: "#ffa198", background: "#2d0f0f", borderLeft: "3px solid #da3633", paddingLeft: "13px" };
+                  } else if (isHunk) {
+                    style = { ...style, color: "#79c0ff", background: "#0d1a2e" };
+                  } else if (isHeader) {
+                    style = { ...style, color: "#555" };
+                  } else {
+                    style = { ...style, color: "#8b949e" };
+                  }
+
+                  return <span key={i} style={style}>{line || " "}</span>;
                 })}
-              </pre>
+              </div>
             )}
           </div>
         )}
