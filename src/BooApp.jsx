@@ -352,13 +352,9 @@ function CommitCard({ commit, index, total }) {
   );
 }
 
-function CostBadge({ usage }) {
-  if (!usage) return null;
+function normalizeTokens(usage) {
   const inputTokens =
-    usage.input_tokens ??
-    usage.prompt_tokens ??
-    usage.total_tokens ??
-    0;
+    usage.input_tokens ?? usage.prompt_tokens ?? usage.total_tokens ?? 0;
   const outputTokens =
     usage.output_tokens ??
     usage.completion_tokens ??
@@ -366,6 +362,12 @@ function CostBadge({ usage }) {
       ? Math.max(usage.total_tokens - inputTokens, 0)
       : 0);
   const hasCost = typeof usage.cost === "number" && !Number.isNaN(usage.cost);
+  return { inputTokens, outputTokens, hasCost };
+}
+
+function CostBadge({ usage }) {
+  if (!usage) return null;
+  const { inputTokens, outputTokens, hasCost } = normalizeTokens(usage);
   return (
     <div
       style={{
@@ -445,24 +447,7 @@ export default function BooApp() {
     setSelectedModelKey(e.target.value);
   };
 
-  const normalizedUsage = usage
-    ? (() => {
-        const inputTokens =
-          usage.input_tokens ??
-          usage.prompt_tokens ??
-          usage.total_tokens ??
-          0;
-        const outputTokens =
-          usage.output_tokens ??
-          usage.completion_tokens ??
-          (usage.total_tokens != null
-            ? Math.max(usage.total_tokens - inputTokens, 0)
-            : 0);
-        const hasCost =
-          typeof usage.cost === "number" && !Number.isNaN(usage.cost);
-        return { inputTokens, outputTokens, hasCost };
-      })()
-    : null;
+  const normalizedUsage = usage ? normalizeTokens(usage) : null;
 
   const generate = async () => {
     if (!input.trim() || loading) return;
@@ -570,17 +555,7 @@ export default function BooApp() {
 
       const rawUsage = data.usage || null;
       if (rawUsage) {
-        const inputTokens =
-          rawUsage.input_tokens ??
-          rawUsage.prompt_tokens ??
-          rawUsage.total_tokens ??
-          0;
-        const outputTokens =
-          rawUsage.output_tokens ??
-          rawUsage.completion_tokens ??
-          (rawUsage.total_tokens != null
-            ? Math.max(rawUsage.total_tokens - inputTokens, 0)
-            : 0);
+        const { inputTokens, outputTokens } = normalizeTokens(rawUsage);
 
         const baseUsage = {
           ...rawUsage,
@@ -648,19 +623,7 @@ export default function BooApp() {
       }
     });
     if (usage) {
-      const inputTokens =
-        usage.input_tokens ??
-        usage.prompt_tokens ??
-        usage.total_tokens ??
-        0;
-      const outputTokens =
-        usage.output_tokens ??
-        usage.completion_tokens ??
-        (usage.total_tokens != null
-          ? Math.max(usage.total_tokens - inputTokens, 0)
-          : 0);
-      const hasCost =
-        typeof usage.cost === "number" && !Number.isNaN(usage.cost);
+      const { inputTokens, outputTokens, hasCost } = normalizeTokens(usage);
       const costText = hasCost ? `~$${usage.cost.toFixed(4)}` : "N/A";
       lines.push(
         `---\n_Cost: ${costText} | ${inputTokens} in / ${outputTokens} out tokens_`,
