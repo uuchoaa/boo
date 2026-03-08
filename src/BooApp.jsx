@@ -590,7 +590,6 @@ export default function BooApp() {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [phase, setPhase] = useState("input"); // input | result
   const textareaRef = useRef(null);
   const [lastDurationMs, setLastDurationMs] = useState(null);
 
@@ -636,8 +635,6 @@ export default function BooApp() {
     setSelectedModelKey(e.target.value);
   };
 
-  const normalizedUsage = usage ? normalizeTokens(usage) : null;
-
   const generate = async () => {
     if (!input.trim() || loading) return;
     if (!currentModel) {
@@ -665,7 +662,6 @@ export default function BooApp() {
         setUsage(null);
         setEvaluated(false);
         setOverallScore(null);
-        setPhase("result");
         return;
       }
 
@@ -780,7 +776,6 @@ export default function BooApp() {
         setUsage(null);
       }
 
-      setPhase("result");
     } catch (e) {
       setError("Parse error: " + e.message);
     } finally {
@@ -919,8 +914,6 @@ export default function BooApp() {
         background: "#080808",
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
         color: "#e6edf3",
-        display: "flex",
-        flexDirection: "column",
       }}
     >
       <style>{`
@@ -931,9 +924,10 @@ export default function BooApp() {
         ::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
         textarea { outline: none; }
         button { outline: none; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* Header */}
+      {/* Header — sticky, session-ending actions only */}
       <div
         style={{
           borderBottom: "1px solid #151515",
@@ -942,146 +936,37 @@ export default function BooApp() {
           alignItems: "center",
           justifyContent: "space-between",
           background: "#0a0a0a",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span
-            style={{
-              fontSize: "14px",
-              fontWeight: 600,
-              letterSpacing: "0.1em",
-              color: "#e6a817",
-            }}
-          >
+          <span style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "0.1em", color: "#e6a817" }}>
             boo
           </span>
           <span style={{ color: "#333", fontSize: "12px" }}>/</span>
           <span style={{ fontSize: "11px", color: "#666" }}>ghost dev</span>
         </div>
 
-        {phase === "result" && (
+        {commits && (
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <CostBadge usage={usage} />
-            {lastDurationMs != null && (
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#666",
-                  fontFamily: "monospace",
-                }}
+            {[{ label: "export .md", action: exportMarkdown }, { label: "export .json", action: exportJSON }].map(({ label, action }) => (
+              <button
+                key={label}
+                onClick={action}
+                style={{ background: "none", border: "1px solid #222", borderRadius: "5px", color: "#666", cursor: "pointer", padding: "4px 10px", fontSize: "11px", transition: "all 0.15s" }}
+                onMouseEnter={(e) => { e.target.style.borderColor = "#e6a817"; e.target.style.color = "#e6a817"; }}
+                onMouseLeave={(e) => { e.target.style.borderColor = "#222"; e.target.style.color = "#666"; }}
               >
-                {`~${(lastDurationMs / 1000).toFixed(2)}s`}
-              </span>
-            )}
-            {evaluated && overallScore !== null && (() => {
-              const sc = scoreColor(overallScore);
-              return (
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    fontFamily: "monospace",
-                    padding: "3px 10px",
-                    borderRadius: "5px",
-                    background: sc.bg,
-                    border: `1px solid ${sc.border}`,
-                    color: sc.color,
-                  }}
-                >
-                  {overallScore}/10
-                </span>
-              );
-            })()}
+                {label}
+              </button>
+            ))}
             <button
-              onClick={evaluate}
-              disabled={evaluating}
-              style={{
-                background: evaluated ? "none" : "#f59e0b",
-                border: `1px solid ${evaluated ? "#92400e" : "#f59e0b"}`,
-                borderRadius: "5px",
-                color: evaluating ? "#555" : evaluated ? "#f59e0b" : "#000",
-                cursor: evaluating ? "not-allowed" : "pointer",
-                padding: "4px 10px",
-                fontSize: "11px",
-                fontWeight: evaluated ? 400 : 600,
-                fontFamily: "monospace",
-                transition: "all 0.15s",
-              }}
-            >
-              {evaluating ? "evaluating..." : evaluated ? "re-evaluate" : "evaluate →"}
-            </button>
-            <button
-              onClick={exportMarkdown}
-              style={{
-                background: "none",
-                border: "1px solid #222",
-                borderRadius: "5px",
-                color: "#666",
-                cursor: "pointer",
-                padding: "4px 10px",
-                fontSize: "11px",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = "#e6a817";
-                e.target.style.color = "#e6a817";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = "#222";
-                e.target.style.color = "#666";
-              }}
-            >
-              export .md
-            </button>
-            <button
-              onClick={exportJSON}
-              style={{
-                background: "none",
-                border: "1px solid #222",
-                borderRadius: "5px",
-                color: "#666",
-                cursor: "pointer",
-                padding: "4px 10px",
-                fontSize: "11px",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = "#e6a817";
-                e.target.style.color = "#e6a817";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = "#222";
-                e.target.style.color = "#666";
-              }}
-            >
-              export .json
-            </button>
-            <button
-              onClick={() => {
-                setPhase("input");
-                setCommits(null);
-                setUsage(null);
-                setEvaluated(false);
-                setOverallScore(null);
-              }}
-              style={{
-                background: "none",
-                border: "1px solid #222",
-                borderRadius: "5px",
-                color: "#666",
-                cursor: "pointer",
-                padding: "4px 10px",
-                fontSize: "11px",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = "#555";
-                e.target.style.color = "#aaa";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = "#222";
-                e.target.style.color = "#666";
-              }}
+              onClick={() => { setCommits(null); setUsage(null); setEvaluated(false); setOverallScore(null); setLastDurationMs(null); setError(null); }}
+              style={{ background: "none", border: "1px solid #222", borderRadius: "5px", color: "#666", cursor: "pointer", padding: "4px 10px", fontSize: "11px", transition: "all 0.15s" }}
+              onMouseEnter={(e) => { e.target.style.borderColor = "#555"; e.target.style.color = "#aaa"; }}
+              onMouseLeave={(e) => { e.target.style.borderColor = "#222"; e.target.style.color = "#666"; }}
             >
               ← new
             </button>
@@ -1089,457 +974,134 @@ export default function BooApp() {
         )}
       </div>
 
-      {/* Main */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* INPUT PHASE */}
-        {phase === "input" && (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              padding: "24px",
-              maxWidth: "800px",
-              margin: "0 auto",
-              width: "100%",
-            }}
-          >
-            <div
-              style={{
-                marginBottom: "12px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "12px",
-              }}
-            >
-              <div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#666",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  issue + codebase context
-                </span>
-                <span
-                  style={{
-                    marginLeft: "8px",
-                    fontSize: "10px",
-                    color: "#555",
-                  }}
-                >
-                  markdown
-                </span>
-                <span
-                  style={{
-                    marginLeft: "12px",
-                    fontSize: "10px",
-                    color: "#444",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  ~{Math.round(input.length / 4).toLocaleString()} tkn
-                </span>
-              </div>
+      {/* Notebook content */}
+      <div style={{ maxWidth: "820px", margin: "0 auto", padding: "32px 24px", width: "100%" }}>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "11px",
-                  color: "#666",
-                }}
+        {/* ── Block 1: Input ── */}
+        <div style={{ marginBottom: commits ? "48px" : 0 }}>
+          {/* Label row */}
+          <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+            <div>
+              <span style={{ fontSize: "11px", color: "#666", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                issue + codebase context
+              </span>
+              <span style={{ marginLeft: "8px", fontSize: "10px", color: "#555" }}>markdown</span>
+              <span style={{ marginLeft: "12px", fontSize: "10px", color: "#444", fontFamily: "monospace" }}>
+                ~{Math.round(input.length / 4).toLocaleString()} tkn
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#666" }}>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>model</span>
+              <select
+                value={currentModel ? selectedModelKey : ""}
+                onChange={handleModelChange}
+                style={{ background: "#0d0d0d", border: "1px solid #252525", borderRadius: "4px", color: "#d8dfe8", fontSize: "12px", padding: "4px 8px", fontFamily: "monospace" }}
               >
-                <span
-                  style={{
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  model
+                {allModels.length === 0 && <option value="">no models configured</option>}
+                {allModels.map((m) => <option key={m.modelKey} value={m.modelKey}>{m.label}</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowOpenAIConfig((v) => !v)}
+                style={{ background: "none", border: "1px solid #252525", borderRadius: "4px", color: "#666", cursor: "pointer", padding: "3px 8px", fontSize: "11px", fontFamily: "monospace" }}
+              >
+                openai-compatible <span style={{ marginLeft: 4 }}>{showOpenAIConfig ? "▴" : "▾"}</span>
+              </button>
+            </div>
+          </div>
+
+          {showOpenAIConfig && (
+            <div style={{ marginBottom: "12px", padding: "10px 12px", borderRadius: "6px", border: "1px solid #1a1a1a", background: "#050505" }}>
+              <span style={{ fontSize: "11px", color: "#666", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+                groq api key
+              </span>
+              <input
+                type="password"
+                value={openaiApiKey}
+                onChange={(e) => { const v = e.target.value; setOpenaiApiKey(v); safeSetLocalStorageItem("boo-openai-api-key", v); }}
+                style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "4px", color: "#c9d1d9", fontSize: "11px", padding: "4px 8px", fontFamily: "monospace", width: "100%" }}
+              />
+            </div>
+          )}
+
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={PLACEHOLDER}
+            style={{ display: "block", width: "100%", minHeight: "420px", background: "#0f0f0f", border: "1px solid #222", borderRadius: "8px", padding: "20px", color: "#dbe3ec", fontSize: "14px", lineHeight: "1.8", fontFamily: "monospace", resize: "none", transition: "border-color 0.15s" }}
+            onFocus={(e) => (e.target.style.borderColor = "#333")}
+            onBlur={(e) => (e.target.style.borderColor = "#222")}
+          />
+
+          {error && (
+            <div style={{ marginTop: "12px", padding: "10px 14px", background: "#1a0808", border: "1px solid #5a1515", borderRadius: "6px", color: "#f87171", fontSize: "11px" }}>
+              ⚠ {error}
+            </div>
+          )}
+
+          {/* Action row */}
+          <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+              <CostBadge usage={usage} />
+              {lastDurationMs != null && (
+                <span style={{ fontSize: "11px", color: "#666", fontFamily: "monospace" }}>
+                  ~{(lastDurationMs / 1000).toFixed(2)}s
                 </span>
-                <select
-                  value={currentModel ? selectedModelKey : ""}
-                  onChange={handleModelChange}
-                  style={{
-                    background: "#0d0d0d",
-                    border: "1px solid #252525",
-                    borderRadius: "4px",
-                    color: "#d8dfe8",
-                    fontSize: "12px",
-                    padding: "4px 8px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {allModels.length === 0 && (
-                    <option value="">no models configured</option>
-                  )}
-                  {allModels.map((m) => (
-                    <option key={m.modelKey} value={m.modelKey}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+              )}
+            </div>
+            <button
+              onClick={generate}
+              disabled={!input.trim() || loading}
+              style={{ background: loading ? "#1a1a0a" : input.trim() ? "#e6a817" : "#1a1a1a", border: "none", borderRadius: "7px", padding: "10px 24px", cursor: input.trim() && !loading ? "pointer" : "not-allowed", color: input.trim() && !loading ? "#000" : "#555", fontSize: "13px", fontWeight: 600, fontFamily: "monospace", letterSpacing: "0.05em", transition: "all 0.15s", display: "flex", alignItems: "center", gap: "8px" }}
+            >
+              {loading ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>generating...</> : "generate commits →"}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Block 2: Commits ── */}
+        {commits && (
+          <div>
+            {/* Section header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #151515" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <span style={{ fontSize: "10px", color: "#555", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  {commits.length} commits
+                </span>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {Object.entries(typeStats).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                    const colors = TYPE_COLORS[type] || TYPE_COLORS.misc;
+                    return (
+                      <span key={type} style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "3px", background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text, fontFamily: "monospace" }}>
+                        {type} {count}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                {evaluated && overallScore !== null && (() => {
+                  const sc = scoreColor(overallScore);
+                  return (
+                    <span style={{ fontSize: "12px", fontWeight: 600, fontFamily: "monospace", padding: "3px 10px", borderRadius: "5px", background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color }}>
+                      {overallScore}/10
+                    </span>
+                  );
+                })()}
                 <button
-                  type="button"
-                  onClick={() => setShowOpenAIConfig((v) => !v)}
-                  style={{
-                    background: "none",
-                    border: "1px solid #252525",
-                    borderRadius: "4px",
-                    color: "#666",
-                    cursor: "pointer",
-                    padding: "3px 8px",
-                    fontSize: "11px",
-                    fontFamily: "monospace",
-                  }}
+                  onClick={evaluate}
+                  disabled={evaluating}
+                  style={{ background: evaluated ? "none" : "#f59e0b", border: `1px solid ${evaluated ? "#92400e" : "#f59e0b"}`, borderRadius: "5px", color: evaluating ? "#555" : evaluated ? "#f59e0b" : "#000", cursor: evaluating ? "not-allowed" : "pointer", padding: "4px 10px", fontSize: "11px", fontWeight: evaluated ? 400 : 600, fontFamily: "monospace", transition: "all 0.15s" }}
                 >
-                  openai-compatible
-                  <span style={{ marginLeft: 4 }}>
-                    {showOpenAIConfig ? "▴" : "▾"}
-                  </span>
+                  {evaluating ? "evaluating..." : evaluated ? "re-evaluate" : "evaluate →"}
                 </button>
               </div>
             </div>
 
-            {showOpenAIConfig && (
-              <div
-                style={{
-                  marginBottom: "12px",
-                  padding: "10px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid #1a1a1a",
-                  background: "#050505",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: "#666",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    groq api key
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <input
-                    type="password"
-                    value={openaiApiKey}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setOpenaiApiKey(next);
-                      safeSetLocalStorageItem("boo-openai-api-key", next);
-                    }}
-                    style={{
-                      background: "#0d0d0d",
-                      border: "1px solid #1a1a1a",
-                      borderRadius: "4px",
-                      color: "#c9d1d9",
-                      fontSize: "11px",
-                      padding: "4px 8px",
-                      fontFamily: "monospace",
-                      flex: 1,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={PLACEHOLDER}
-              style={{
-                flex: 1,
-                minHeight: "420px",
-                background: "#0f0f0f",
-                border: "1px solid #222",
-                borderRadius: "8px",
-                padding: "20px",
-                color: "#dbe3ec",
-                fontSize: "14px",
-                lineHeight: "1.8",
-                fontFamily: "monospace",
-                resize: "none",
-                transition: "border-color 0.15s",
-              }}
-              onFocus={(e) => (e.target.style.borderColor = "#333")}
-              onBlur={(e) => (e.target.style.borderColor = "#222")}
-            />
-
-            {error && (
-              <div
-                style={{
-                  marginTop: "12px",
-                  padding: "10px 14px",
-                  background: "#1a0808",
-                  border: "1px solid #5a1515",
-                  borderRadius: "6px",
-                  color: "#f87171",
-                  fontSize: "11px",
-                }}
-              >
-                ⚠ {error}
-              </div>
-            )}
-
-            <div
-              style={{
-                marginTop: "16px",
-                display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={generate}
-                disabled={!input.trim() || loading}
-                style={{
-                  background: loading
-                    ? "#1a1a0a"
-                    : input.trim()
-                      ? "#e6a817"
-                      : "#1a1a1a",
-                  border: "none",
-                  borderRadius: "7px",
-                  padding: "10px 24px",
-                  cursor: input.trim() && !loading ? "pointer" : "not-allowed",
-                  color: input.trim() && !loading ? "#000" : "#555",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  fontFamily: "monospace",
-                  letterSpacing: "0.05em",
-                  transition: "all 0.15s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                {loading ? (
-                  <>
-                    <span
-                      style={{
-                        animation: "spin 1s linear infinite",
-                        display: "inline-block",
-                      }}
-                    >
-                      ◌
-                    </span>
-                    generating...
-                  </>
-                ) : (
-                  "generate commits →"
-                )}
-              </button>
-            </div>
-
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-
-        {/* RESULT PHASE */}
-        {phase === "result" && commits && (
-          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-            {/* Sidebar — stats */}
-            <div
-              style={{
-                width: "200px",
-                flexShrink: 0,
-                borderRight: "1px solid #151515",
-                padding: "20px 16px",
-                background: "#0a0a0a",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "10px",
-                  color: "#555",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  marginBottom: "16px",
-                }}
-              >
-                summary
-              </div>
-
-              <div style={{ marginBottom: "20px" }}>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 600,
-                    color: "#e6a817",
-                    lineHeight: 1,
-                  }}
-                >
-                  {commits.length}
-                </div>
-                <div
-                  style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}
-                >
-                  commits
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "20px" }}>
-                {Object.entries(typeStats)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([type, count]) => {
-                    const colors = TYPE_COLORS[type] || TYPE_COLORS.misc;
-                    return (
-                      <div
-                        key={type}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "4px 0",
-                          borderBottom: "1px solid #111",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: colors.text,
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {type}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            color: "#666",
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {count}
-                        </span>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              {usage && (
-                <div
-                  style={{ borderTop: "1px solid #151515", paddingTop: "16px" }}
-                >
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      color: "#555",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    cost
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#777",
-                      lineHeight: "1.8",
-                    }}
-                  >
-                    {normalizedUsage && (
-                      <>
-                        <div>
-                          in: {normalizedUsage.inputTokens.toLocaleString()}
-                        </div>
-                        <div>
-                          out: {normalizedUsage.outputTokens.toLocaleString()}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      color: "#e6a817",
-                    }}
-                  >
-                    {normalizedUsage?.hasCost && typeof usage.cost === "number"
-                      ? `$${usage.cost.toFixed(4)}`
-                      : "N/A"}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Commit list */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-              <div style={{ maxWidth: "720px" }}>
-                {/* Prompt reminder */}
-                <div
-                  style={{
-                    marginBottom: "24px",
-                    padding: "12px 16px",
-                    background: "#0a0a0a",
-                    border: "1px solid #1a1a1a",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      color: "#444",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    prompt
-                  </div>
-                  <pre
-                    style={{
-                      margin: 0,
-                      fontSize: "12px",
-                      lineHeight: "1.7",
-                      color: "#666",
-                      fontFamily: "monospace",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      maxHeight: "160px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {input}
-                  </pre>
-                </div>
-
-                {commits.map((commit, i) => (
-                  <CommitCard
-                    key={i}
-                    commit={commit}
-                    index={i}
-                    total={commits.length}
-                  />
-                ))}
-              </div>
-            </div>
+            {commits.map((commit, i) => (
+              <CommitCard key={i} commit={commit} index={i} total={commits.length} />
+            ))}
           </div>
         )}
       </div>
