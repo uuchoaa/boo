@@ -1260,6 +1260,44 @@ export default function BooApp() {
             {/* Commit list */}
             <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
               <div style={{ maxWidth: "720px" }}>
+                {/* Prompt reminder */}
+                <div
+                  style={{
+                    marginBottom: "24px",
+                    padding: "12px 16px",
+                    background: "#0a0a0a",
+                    border: "1px solid #1a1a1a",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      color: "#444",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    prompt
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      fontSize: "12px",
+                      lineHeight: "1.7",
+                      color: "#666",
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxHeight: "160px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {input}
+                  </pre>
+                </div>
+
                 {commits.map((commit, i) => (
                   <CommitCard
                     key={i}
