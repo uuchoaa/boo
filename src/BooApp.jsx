@@ -59,24 +59,31 @@ const MOCK_COMMITS = [
     message: "test: add spec for Opportunity GHOSTED status and 7-day stale flag",
     files: ["spec/models/opportunity_spec.rb", "spec/services/daily_briefing_spec.rb"],
     diff: "diff --git a/spec/models/opportunity_spec.rb b/spec/models/opportunity_spec.rb\\nindex 0000000..abc1234 100644\\n--- /dev/null\\n+++ b/spec/models/opportunity_spec.rb\\n@@ -0,0 +1,18 @@\\n+require 'rails_helper'\\n+\\n+RSpec.describe Opportunity do\\n+  describe 'validations' do\\n+    it 'allows ghosted status' do\\n+      expect(build(:opportunity, status: 'ghosted')).to be_valid\\n+    end\\n+  end\\n+\\n+  describe '.ghosted_stale' do\\n+    it 'returns opportunities ghosted for more than 7 days' do\\n+      stale  = create(:opportunity, status: 'ghosted', updated_at: 8.days.ago)\\n+      recent = create(:opportunity, status: 'ghosted', updated_at: 3.days.ago)\\n+      expect(Opportunity.ghosted_stale).to     include(stale)\\n+      expect(Opportunity.ghosted_stale).not_to include(recent)\\n+    end\\n+  end\\n+end",
+    issues: [],
   },
   {
     order: 2,
     message: "feat: add GHOSTED to Opportunity statuses with ghosted_stale scope",
     files: ["app/models/opportunity.rb"],
     diff: "diff --git a/app/models/opportunity.rb b/app/models/opportunity.rb\\nindex def0001..def0002 100644\\n--- a/app/models/opportunity.rb\\n+++ b/app/models/opportunity.rb\\n@@ -1,7 +1,10 @@\\n class Opportunity < ApplicationRecord\\n-  STATUSES = %w[prospect applied screening interview offer rejected closed].freeze\\n+  STATUSES = %w[prospect applied screening interview offer rejected closed ghosted].freeze\\n+  GHOSTED_STALE_DAYS = 7\\n+\\n   belongs_to :contact, optional: true\\n   validates :company, :role, presence: true\\n   validates :status, inclusion: { in: STATUSES }\\n-  scope :active, -> { where.not(status: %w[rejected closed]) }\\n+  scope :active,        -> { where.not(status: %w[rejected closed ghosted]) }\\n+  scope :ghosted_stale, -> { where(status: 'ghosted').where('updated_at < ?', GHOSTED_STALE_DAYS.days.ago) }\\n end",
+    issues: [
+      "No data migration: existing records with status in %w[rejected closed] won't have ghosted — but records already marked ghosted before this deploy will fail the updated :active scope silently",
+      "ghosted_stale scope calls GHOSTED_STALE_DAYS.days.ago at query time (correct), but GHOSTED_STALE_DAYS is an Integer — ensure ActiveSupport is loaded before this constant is referenced in tests",
+    ],
   },
   {
     order: 3,
     message: "feat: expose ghosted key in DailyBriefing",
     files: ["app/services/daily_briefing.rb"],
     diff: "diff --git a/app/services/daily_briefing.rb b/app/services/daily_briefing.rb\\nindex aaa0001..aaa0002 100644\\n--- a/app/services/daily_briefing.rb\\n+++ b/app/services/daily_briefing.rb\\n@@ -2,7 +2,8 @@ class DailyBriefing\\n   def call\\n     stale    = Opportunity.active.where('updated_at < ?', 5.days.ago)\\n     upcoming = Opportunity.where(status: %w[screening interview])\\n-    { stale: stale, upcoming: upcoming }\\n+    ghosted  = Opportunity.ghosted_stale\\n+    { stale: stale, upcoming: upcoming, ghosted: ghosted }\\n   end\\n end",
+    issues: [],
   },
   {
     order: 4,
     message: "docs: document GHOSTED status and daily briefing ghosted key",
     files: ["docs/opportunity_statuses.md"],
     diff: "diff --git a/docs/opportunity_statuses.md b/docs/opportunity_statuses.md\\nnew file mode 100644\\nindex 0000000..bbb0001\\n--- /dev/null\\n+++ b/docs/opportunity_statuses.md\\n@@ -0,0 +1,9 @@\\n+# Opportunity Statuses\\n+\\n+| Status  | Description                                 |\\n+|---------|---------------------------------------------|\\n+| ghosted | Recruiter went silent; set manually by user |\\n+\\n+## Daily Briefing\\n+\\n+- `ghosted`: opportunities in GHOSTED status for more than 7 days (`Opportunity.ghosted_stale`).",
+    issues: [],
   },
 ];
 
@@ -127,6 +134,24 @@ Schema:
       "files": ["spec/..."],
       "diff": "diff --git a/...(full unified diff, newlines as \\n)"
     }
+  ]
+}`;
+
+const REVIEW_SYSTEM = `You are a senior developer reviewing generated git diffs for correctness.
+
+For each commit, identify concrete issues in the diff:
+- Nil/null dereferences or missing guards
+- Wrong method signatures or missing arguments
+- Logic errors (wrong conditions, off-by-one, incorrect operators)
+- Missing validations or edge case handling
+
+Be terse. Only flag real issues — empty arrays are valid and expected.
+Return ONLY valid JSON — no markdown, no preamble, no backticks.
+
+Schema:
+{
+  "reviews": [
+    { "order": 1, "issues": ["concise description of issue"] }
   ]
 }`;
 
@@ -344,6 +369,35 @@ function CommitCard({ commit, index, total }) {
                   >
                     <span style={{ color: "#555" }}>📄 </span>
                     {f}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Issues */}
+            {commit.issues?.length > 0 && (
+              <div
+                style={{
+                  padding: "8px 14px",
+                  borderBottom: `1px solid ${colors.border}30`,
+                  background: "#1a0e00",
+                }}
+              >
+                {commit.issues.map((issue, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: "7px",
+                      fontSize: "11px",
+                      color: "#f59e0b",
+                      fontFamily: "monospace",
+                      lineHeight: "1.6",
+                      padding: "2px 0",
+                    }}
+                  >
+                    <span style={{ flexShrink: 0 }}>⚠</span>
+                    <span>{issue}</span>
                   </div>
                 ))}
               </div>
@@ -631,7 +685,49 @@ export default function BooApp() {
         }
       }
 
-      setCommits(parsed.commits || []);
+      // Second pass: review each diff for issues (silent failure — never blocks result)
+      let reviewedCommits = parsed.commits || [];
+      try {
+        const reviewPrompt = JSON.stringify(
+          reviewedCommits.map((c) => ({ order: c.order, message: c.message, diff: c.diff })),
+        );
+        let reviewText = "";
+        if (isGroqProvider) {
+          const groq = new Groq({ apiKey: openaiApiKey.trim(), dangerouslyAllowBrowser: true });
+          const rd = await groq.chat.completions.create({
+            model: currentModel.modelId,
+            max_tokens: 2048,
+            messages: [
+              { role: "system", content: REVIEW_SYSTEM },
+              { role: "user", content: reviewPrompt },
+            ],
+          });
+          reviewText = rd.choices?.[0]?.message?.content || "";
+        } else {
+          const res = await fetch(PROVIDERS.anthropic.apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: currentModel.modelId,
+              max_tokens: 2048,
+              system: REVIEW_SYSTEM,
+              messages: [{ role: "user", content: reviewPrompt }],
+            }),
+          });
+          const rd = await res.json();
+          reviewText = rd.content?.map((b) => b.text || "").join("") || "";
+        }
+        let rc = reviewText.replace(/```json|```/gi, "").trim();
+        const rf = rc.indexOf("{"), rl = rc.lastIndexOf("}");
+        if (rf !== -1 && rl !== -1) rc = rc.slice(rf, rl + 1);
+        const rp = JSON.parse(rc);
+        const reviewMap = Object.fromEntries((rp.reviews || []).map((r) => [r.order, r.issues || []]));
+        reviewedCommits = reviewedCommits.map((c) => ({ ...c, issues: reviewMap[c.order] ?? [] }));
+      } catch {
+        // review failed — show commits without issues
+      }
+
+      setCommits(reviewedCommits);
 
       const rawUsage = data.usage || null;
       if (rawUsage) {
