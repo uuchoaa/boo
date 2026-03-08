@@ -911,6 +911,16 @@ export default function BooApp() {
                 >
                   markdown
                 </span>
+                <span
+                  style={{
+                    marginLeft: "12px",
+                    fontSize: "10px",
+                    color: "#444",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  ~{Math.round(input.length / 4).toLocaleString()} tkn
+                </span>
               </div>
 
               <div
