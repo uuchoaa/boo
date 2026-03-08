@@ -333,6 +333,24 @@ function CommitCard({ commit, index, total }) {
             {commit.files?.length || 0} files
           </span>
 
+          {/* Issues badge */}
+          {commit.issues?.length > 0 && (
+            <span
+              style={{
+                fontSize: "10px",
+                padding: "2px 7px",
+                borderRadius: "3px",
+                background: "#1a0e00",
+                border: "1px solid #92400e",
+                color: "#f59e0b",
+                fontFamily: "monospace",
+                flexShrink: 0,
+              }}
+            >
+              ⚠ {commit.issues.length}
+            </span>
+          )}
+
           {/* Chevron */}
           <span
             style={{
