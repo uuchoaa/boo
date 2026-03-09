@@ -6,7 +6,7 @@ export function ScoreBadge({ score }) {
     ? { bg: "#1a1505", border: "#4d3a05", text: "#e6a817" }
     : { bg: "#1a0808", border: "#5a1515", text: "#f87171" };
   return (
-    <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "monospace", padding: "2px 8px", borderRadius: "4px", background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
+    <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "monospace", padding: "3px 10px", borderRadius: "5px", background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
       {score}/10
     </span>
   );
@@ -14,7 +14,7 @@ export function ScoreBadge({ score }) {
 
 export function ModelBadge({ model }) {
   return (
-    <span style={{ fontSize: "10px", fontFamily: "monospace", padding: "2px 6px", borderRadius: "3px", background: "#111", border: "1px solid #1e1e1e", color: "#555" }}>
+    <span style={{ fontSize: "12px", fontFamily: "monospace", padding: "3px 8px", borderRadius: "4px", background: "#111", border: "1px solid #222", color: "#666" }}>
       {model}
     </span>
   );
