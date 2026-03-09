@@ -433,35 +433,6 @@ function CommitCard({ commit, index, total }) {
               </div>
             )}
 
-            {/* Issues */}
-            {commit.issues?.length > 0 && (
-              <div
-                style={{
-                  padding: "8px 14px",
-                  borderBottom: `1px solid ${colors.border}30`,
-                  background: "#1a0e00",
-                }}
-              >
-                {commit.issues.map((issue, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: "7px",
-                      fontSize: "11px",
-                      color: "#f59e0b",
-                      fontFamily: "monospace",
-                      lineHeight: "1.6",
-                      padding: "2px 0",
-                    }}
-                  >
-                    <span style={{ flexShrink: 0 }}>⚠</span>
-                    <span>{issue}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Diff */}
             {commit.diff && (
               <div
@@ -581,6 +552,31 @@ function CostBadge({ usage }) {
   );
 }
 
+function PromptBlock({ label, value, onChange, minHeight = "420px", placeholder, textareaRef, rightSlot }) {
+  return (
+    <div>
+      <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+        <div>
+          <span style={{ fontSize: "11px", color: "#666", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+          <span style={{ marginLeft: "12px", fontSize: "10px", color: "#444", fontFamily: "monospace" }}>
+            ~{Math.round(value.length / 4).toLocaleString()} tkn
+          </span>
+        </div>
+        {rightSlot}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ display: "block", width: "100%", minHeight, background: "#0f0f0f", border: "1px solid #222", borderRadius: "8px", padding: "20px", color: "#dbe3ec", fontSize: "14px", lineHeight: "1.8", fontFamily: "monospace", resize: "none", transition: "border-color 0.15s" }}
+        onFocus={(e) => (e.target.style.borderColor = "#333")}
+        onBlur={(e) => (e.target.style.borderColor = "#222")}
+      />
+    </div>
+  );
+}
+
 export default function BooApp() {
   const [input, setInput] = useState(PLACEHOLDER);
   const [commits, setCommits] = useState(null);
@@ -603,6 +599,8 @@ export default function BooApp() {
     return stored || "";
   });
   const [showOpenAIConfig, setShowOpenAIConfig] = useState(false);
+  const [reviewSystem, setReviewSystem] = useState(REVIEW_SYSTEM);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     safeSetLocalStorageItem("boo-selected-model", selectedModelKey);
@@ -654,6 +652,8 @@ export default function BooApp() {
         : Date.now();
     setLoading(true);
     setError(null);
+    setEvaluated(false);
+    setOverallScore(null);
 
     try {
       if (isMockProvider) {
@@ -826,7 +826,7 @@ export default function BooApp() {
           body: JSON.stringify({
             model: currentModel.modelId,
             max_tokens: 2048,
-            system: REVIEW_SYSTEM,
+            system: reviewSystem,
             messages: [{ role: "user", content: reviewPrompt }],
           }),
         });
@@ -949,8 +949,16 @@ export default function BooApp() {
           <span style={{ fontSize: "11px", color: "#666" }}>ghost dev</span>
         </div>
 
-        {commits && (
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setPreview((v) => !v)}
+            style={{ background: preview ? "#1a1505" : "none", border: `1px solid ${preview ? "#e6a817" : "#222"}`, borderRadius: "5px", color: preview ? "#e6a817" : "#666", cursor: "pointer", padding: "4px 10px", fontSize: "11px", fontFamily: "monospace", transition: "all 0.15s" }}
+          >
+            {preview ? "edit" : "preview"}
+          </button>
+          {commits && (
+            <>
             {[{ label: "export .md", action: exportMarkdown }, { label: "export .json", action: exportJSON }].map(({ label, action }) => (
               <button
                 key={label}
@@ -970,46 +978,34 @@ export default function BooApp() {
             >
               ← new
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Notebook content */}
       <div style={{ maxWidth: "820px", margin: "0 auto", padding: "32px 24px", width: "100%" }}>
-
-        {/* ── Block 1: Input ── */}
-        <div style={{ marginBottom: commits ? "48px" : 0 }}>
-          {/* Label row */}
-          <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-            <div>
-              <span style={{ fontSize: "11px", color: "#666", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                issue + codebase context
-              </span>
-              <span style={{ marginLeft: "8px", fontSize: "10px", color: "#555" }}>markdown</span>
-              <span style={{ marginLeft: "12px", fontSize: "10px", color: "#444", fontFamily: "monospace" }}>
-                ~{Math.round(input.length / 4).toLocaleString()} tkn
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#666" }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>model</span>
-              <select
-                value={currentModel ? selectedModelKey : ""}
-                onChange={handleModelChange}
-                style={{ background: "#0d0d0d", border: "1px solid #252525", borderRadius: "4px", color: "#d8dfe8", fontSize: "12px", padding: "4px 8px", fontFamily: "monospace" }}
-              >
-                {allModels.length === 0 && <option value="">no models configured</option>}
-                {allModels.map((m) => <option key={m.modelKey} value={m.modelKey}>{m.label}</option>)}
-              </select>
-              <button
-                type="button"
-                onClick={() => setShowOpenAIConfig((v) => !v)}
-                style={{ background: "none", border: "1px solid #252525", borderRadius: "4px", color: "#666", cursor: "pointer", padding: "3px 8px", fontSize: "11px", fontFamily: "monospace" }}
-              >
-                openai-compatible <span style={{ marginLeft: 4 }}>{showOpenAIConfig ? "▴" : "▾"}</span>
-              </button>
-            </div>
+      {preview && (() => {
+        const parts = [input];
+        if (commits?.length) {
+          const commitLines = ["---"];
+          commits.forEach((c) => {
+            commitLines.push(`\n## ${c.order}. ${c.message}`);
+            if (c.files?.length) commitLines.push("Files: " + c.files.join(", "));
+            if (c.diff) commitLines.push("```diff\n" + c.diff.replace(/\\n/g, "\n") + "\n```");
+          });
+          parts.push(commitLines.join("\n"));
+        }
+        const fullMarkdown = parts.join("\n\n");
+        return (
+          <div style={{ width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: "8px", padding: "20px", color: "#dbe3ec", fontSize: "14px", lineHeight: "1.8", fontFamily: "monospace", whiteSpace: "pre-wrap", overflowY: "auto" }}>
+            {fullMarkdown}
           </div>
+        );
+      })()}
 
+      {!preview && <>
+        <div style={{ marginBottom: commits ? "48px" : 0 }}>
           {showOpenAIConfig && (
             <div style={{ marginBottom: "12px", padding: "10px 12px", borderRadius: "6px", border: "1px solid #1a1a1a", background: "#050505" }}>
               <span style={{ fontSize: "11px", color: "#666", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
@@ -1024,14 +1020,32 @@ export default function BooApp() {
             </div>
           )}
 
-          <textarea
-            ref={textareaRef}
+          <PromptBlock
+            label="issue + codebase context"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={setInput}
             placeholder={PLACEHOLDER}
-            style={{ display: "block", width: "100%", minHeight: "420px", background: "#0f0f0f", border: "1px solid #222", borderRadius: "8px", padding: "20px", color: "#dbe3ec", fontSize: "14px", lineHeight: "1.8", fontFamily: "monospace", resize: "none", transition: "border-color 0.15s" }}
-            onFocus={(e) => (e.target.style.borderColor = "#333")}
-            onBlur={(e) => (e.target.style.borderColor = "#222")}
+            textareaRef={textareaRef}
+            rightSlot={
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#666" }}>
+                <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>model</span>
+                <select
+                  value={currentModel ? selectedModelKey : ""}
+                  onChange={handleModelChange}
+                  style={{ background: "#0d0d0d", border: "1px solid #252525", borderRadius: "4px", color: "#d8dfe8", fontSize: "12px", padding: "4px 8px", fontFamily: "monospace" }}
+                >
+                  {allModels.length === 0 && <option value="">no models configured</option>}
+                  {allModels.map((m) => <option key={m.modelKey} value={m.modelKey}>{m.label}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowOpenAIConfig((v) => !v)}
+                  style={{ background: "none", border: "1px solid #252525", borderRadius: "4px", color: "#666", cursor: "pointer", padding: "3px 8px", fontSize: "11px", fontFamily: "monospace" }}
+                >
+                  openai-compatible <span style={{ marginLeft: 4 }}>{showOpenAIConfig ? "▴" : "▾"}</span>
+                </button>
+              </div>
+            }
           />
 
           {error && (
@@ -1064,46 +1078,109 @@ export default function BooApp() {
         {commits && (
           <div>
             {/* Section header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #151515" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <span style={{ fontSize: "10px", color: "#555", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  {commits.length} commits
-                </span>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {Object.entries(typeStats).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
-                    const colors = TYPE_COLORS[type] || TYPE_COLORS.misc;
-                    return (
-                      <span key={type} style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "3px", background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text, fontFamily: "monospace" }}>
-                        {type} {count}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                {evaluated && overallScore !== null && (() => {
-                  const sc = scoreColor(overallScore);
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #151515" }}>
+              <span style={{ fontSize: "10px", color: "#555", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                {commits.length} commits
+              </span>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {Object.entries(typeStats).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                  const colors = TYPE_COLORS[type] || TYPE_COLORS.misc;
                   return (
-                    <span style={{ fontSize: "12px", fontWeight: 600, fontFamily: "monospace", padding: "3px 10px", borderRadius: "5px", background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color }}>
-                      {overallScore}/10
+                    <span key={type} style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "3px", background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text, fontFamily: "monospace" }}>
+                      {type} {count}
                     </span>
                   );
-                })()}
-                <button
-                  onClick={evaluate}
-                  disabled={evaluating}
-                  style={{ background: evaluated ? "none" : "#f59e0b", border: `1px solid ${evaluated ? "#92400e" : "#f59e0b"}`, borderRadius: "5px", color: evaluating ? "#555" : evaluated ? "#f59e0b" : "#000", cursor: evaluating ? "not-allowed" : "pointer", padding: "4px 10px", fontSize: "11px", fontWeight: evaluated ? 400 : 600, fontFamily: "monospace", transition: "all 0.15s" }}
-                >
-                  {evaluating ? "evaluating..." : evaluated ? "re-evaluate" : "evaluate →"}
-                </button>
+                })}
               </div>
             </div>
 
             {commits.map((commit, i) => (
               <CommitCard key={i} commit={commit} index={i} total={commits.length} />
             ))}
+
+            {/* Review system prompt + evaluate button */}
+            <div style={{ marginTop: "32px" }}>
+              <PromptBlock
+                label="review prompt"
+                value={reviewSystem}
+                onChange={setReviewSystem}
+                minHeight="220px"
+              />
+              <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={evaluate}
+                  disabled={evaluating}
+                  style={{ background: evaluating ? "#1a1a0a" : "#e6a817", border: "none", borderRadius: "7px", padding: "10px 24px", cursor: evaluating ? "not-allowed" : "pointer", color: evaluating ? "#555" : "#000", fontSize: "13px", fontWeight: 600, fontFamily: "monospace", letterSpacing: "0.05em", transition: "all 0.15s", display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  {evaluating ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>evaluating...</> : evaluated ? "re-evaluate →" : "evaluate →"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* ── Block 3: Evaluation ── */}
+        {evaluated && (
+          <div style={{ marginTop: "48px" }}>
+            {/* Section header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", paddingBottom: "12px", borderBottom: "1px solid #151515" }}>
+              <span style={{ fontSize: "10px", color: "#555", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                evaluation
+              </span>
+              {overallScore !== null && (() => {
+                const sc = scoreColor(overallScore);
+                return (
+                  <span style={{ fontSize: "13px", fontWeight: 700, fontFamily: "monospace", padding: "4px 14px", borderRadius: "5px", background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color }}>
+                    {overallScore}/10
+                  </span>
+                );
+              })()}
+            </div>
+
+            {/* Per-commit reviews */}
+            {commits.map((commit) => {
+              const type = typeLabel(commit.message);
+              const colors = TYPE_COLORS[type] || TYPE_COLORS.misc;
+              const sc = commit.score !== undefined && commit.score !== null ? scoreColor(commit.score) : null;
+              const hasIssues = commit.issues?.length > 0;
+              return (
+                <div key={commit.order} style={{ marginBottom: "8px", borderRadius: "6px", border: "1px solid #1a1a1a", overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px", background: "#0d0d0d" }}>
+                    <span style={{ fontSize: "11px", color: "#555", fontFamily: "monospace", width: "18px", flexShrink: 0 }}>
+                      {String(commit.order).padStart(2, "0")}
+                    </span>
+                    <span style={{ fontSize: "11px", padding: "2px 7px", borderRadius: "3px", background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text, fontFamily: "monospace", flexShrink: 0 }}>
+                      {type}
+                    </span>
+                    <span style={{ fontSize: "13px", color: "#d8dfe8", fontFamily: "monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {commit.message.replace(/^(feat|test|refactor|fix|docs|ops|chore):\s*/, "")}
+                    </span>
+                    {sc && (
+                      <span style={{ fontSize: "12px", fontWeight: 600, padding: "2px 8px", borderRadius: "3px", background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color, fontFamily: "monospace", flexShrink: 0 }}>
+                        {commit.score}/10
+                      </span>
+                    )}
+                  </div>
+                  {hasIssues ? (
+                    <div style={{ padding: "10px 14px 10px 44px", background: "#100a00", borderTop: "1px solid #1e1200" }}>
+                      {commit.issues.map((issue, i) => (
+                        <div key={i} style={{ display: "flex", gap: "8px", fontSize: "12px", color: "#f59e0b", fontFamily: "monospace", lineHeight: "1.7", padding: "1px 0" }}>
+                          <span style={{ flexShrink: 0 }}>⚠</span>
+                          <span>{issue}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: "7px 14px 7px 44px", background: "#080f08", borderTop: "1px solid #0e1a0e" }}>
+                      <span style={{ fontSize: "11px", color: "#4ade80", fontFamily: "monospace", opacity: 0.6 }}>✓ no issues</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>}
       </div>
     </div>
   );
